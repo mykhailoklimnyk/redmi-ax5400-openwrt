@@ -107,7 +107,13 @@ for p in $WANT; do
 	echo "CONFIG_PACKAGE_$p=y" >> .config
 done
 make defconfig > "$LOGS/defconfig.log" 2>&1 || fail "make defconfig (see logs/defconfig.log)"
-if grep -i 'recursive dependency' "$LOGS/defconfig.log"; then fail "recursive dependency in the configuration"; fi
+# The pinned NSS tree is known to be clean, so any loop there is ours. Current OpenWrt main carries
+# loops between unrelated feed packages; there they are only reported, and the package check
+# below remains the gate.
+if grep -i -B1 'recursive dependency' "$LOGS/defconfig.log"; then
+	[ "$VARIANT" = nss ] && fail "recursive dependency in the configuration"
+	echo "WARNING: recursive dependencies reported by upstream packages (listed above)"
+fi
 MISSING=""
 for p in $WANT; do grep -q "^CONFIG_PACKAGE_$p=y" .config || MISSING="$MISSING $p"; done
 [ -z "$MISSING" ] || fail "packages not selected after defconfig:$MISSING"
