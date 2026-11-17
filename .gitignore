@@ -1,0 +1,8 @@
+src/
+out/
+logs/
+build-info.txt
+__pycache__/
+*.log
+*.sec
+secret.key

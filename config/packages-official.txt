@@ -1,0 +1,8 @@
+# Extra packages for the "official" variant (no NSS).
+kmod-nft-offload
+irqbalance
+nlbwmon
+luci-app-nlbwmon
+luci-i18n-nlbwmon-uk
+iperf3
+ethtool
