@@ -1,0 +1,6 @@
+#!/bin/sh
+# Once a minute: restart dnsmasq if it stops answering on the LAN address (see /usr/sbin/dns-lan-check).
+f=/etc/crontabs/root
+mkdir -p /etc/crontabs
+grep -qs dns-lan-check "$f" || echo '* * * * * /usr/sbin/dns-lan-check' >> "$f"
+exit 0

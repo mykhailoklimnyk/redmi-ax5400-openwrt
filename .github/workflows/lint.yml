@@ -1,0 +1,30 @@
+name: Lint
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax and shellcheck
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+          sh -n files/usr/sbin/ax5400-ota
+          for f in files/etc/uci-defaults/* files/usr/sbin/dns-lan-check; do sh -n "$f"; done
+          shellcheck -S error scripts/*.sh
+          shellcheck -s sh -S error files/usr/sbin/ax5400-ota
+      - name: Python tools
+        run: |
+          python3 -m py_compile tools/patch_ecc.py tools/recovery/recovery_server.py
+          python3 tools/patch_ecc.py --help > /dev/null
+      - name: Executable bits
+        run: |
+          for f in scripts/*.sh files/usr/sbin/ax5400-ota files/usr/sbin/dns-lan-check files/etc/uci-defaults/*; do
+            [ -x "$f" ] || { echo "$f is not executable"; exit 1; }
+          done

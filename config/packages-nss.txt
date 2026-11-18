@@ -1,0 +1,4 @@
+# Extra packages for the "nss" variant.
+# Deliberately absent: irqbalance (NSS spreads interrupts itself), nlbwmon and software flow
+# offloading (they only see traffic that NSS did not accelerate).
+kmod-nft-offload

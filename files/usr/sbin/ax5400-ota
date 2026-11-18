@@ -1,0 +1,135 @@
+#!/bin/sh
+# Over-the-air update helper for the Redmi AX5400 (RA74) images built by this project.
+#
+#   ax5400-ota check      look for a newer release of the installed variant; changes nothing
+#   ax5400-ota download   fetch the newest release to RAM and verify it; changes nothing on flash
+#   ax5400-ota install    download, verify and flash it, keeping the settings (asks first; --yes skips)
+#
+# Settings: /etc/ax5400-ota.conf (optional)
+#   OTA_REPO=owner/name      GitHub repository to follow (default: the one that built this image)
+#   OTA_CHANNEL=stable       "stable" = tested releases only, "candidate" = also pre-releases
+#
+# There is no second firmware slot on this router: a bad image means the vendor recovery mode.
+# That is why every step below must pass before anything is written.
+
+REL=/etc/ax5400-release
+CONF=/etc/ax5400-ota.conf
+KEY=/etc/ax5400-ota/pubkey
+DIR=/tmp/ax5400-ota
+STATE=/tmp/ax5400-ota.state
+
+[ -f "$REL" ] && . "$REL"
+[ -f "$CONF" ] && . "$CONF"
+REPO="${OTA_REPO:-${AX5400_REPO:-}}"
+CHANNEL="${OTA_CHANNEL:-stable}"
+VARIANT="${AX5400_VARIANT:-}"
+CURRENT="${AX5400_VERSION:-}"
+
+die() { echo "ax5400-ota: $*" >&2; exit 1; }
+
+# "nss-20261117-12" -> 2026111700012 (sortable number); empty for anything else
+vkey() {
+	echo "$1" | sed -n -E 's/^[a-z]+-([0-9]{8})-([0-9]{1,5})$/\1 \2/p' | {
+		read -r d n || exit 0
+		printf '%s%05d\n' "$d" "$n"
+	}
+}
+
+find_latest() {
+	[ -n "$REPO" ] || die "no repository set (OTA_REPO in $CONF)"
+	[ -n "$VARIANT" ] || die "$REL is missing: this image was not built by this project"
+	mkdir -p "$DIR"
+	curl -fsSL --max-time 30 -H 'Accept: application/vnd.github+json' \
+		"https://api.github.com/repos/$REPO/releases?per_page=30" -o "$DIR/releases.json" \
+		|| die "cannot read the release list of $REPO"
+	LATEST=""; LATEST_KEY=0; i=0
+	while [ "$i" -lt 30 ]; do
+		tag="$(jsonfilter -i "$DIR/releases.json" -e "@[$i].tag_name" 2>/dev/null)"
+		[ -n "$tag" ] || break
+		pre="$(jsonfilter -i "$DIR/releases.json" -e "@[$i].prerelease" 2>/dev/null)"
+		draft="$(jsonfilter -i "$DIR/releases.json" -e "@[$i].draft" 2>/dev/null)"
+		i=$((i + 1))
+		case "$tag" in "$VARIANT"-*) ;; *) continue ;; esac
+		[ "$draft" = true ] && continue
+		[ "$pre" = true ] && [ "$CHANNEL" != candidate ] && continue
+		k="$(vkey "$tag")"
+		[ -n "$k" ] || continue
+		if [ "$k" -gt "$LATEST_KEY" ]; then LATEST_KEY="$k"; LATEST="$tag"; fi
+	done
+	CUR_KEY="$(vkey "$CURRENT")"
+	AVAILABLE=0
+	[ -n "$LATEST" ] && [ "$LATEST_KEY" -gt "${CUR_KEY:-0}" ] && AVAILABLE=1
+	cat > "$STATE" <<EOF
+variant=$VARIANT
+channel=$CHANNEL
+current=$CURRENT
+latest=$LATEST
+update_available=$AVAILABLE
+checked=$(date +%s)
+EOF
+}
+
+download() {
+	IMG="redmi-ax5400-$LATEST-sysupgrade.bin"
+	base="https://github.com/$REPO/releases/download/$LATEST"
+	cd "$DIR" || die "no $DIR"
+	rm -f SHA256SUMS SHA256SUMS.sig ./*-sysupgrade.bin
+	for f in SHA256SUMS SHA256SUMS.sig "$IMG"; do
+		echo "downloading $f"
+		curl -fsSL --max-time 600 -o "$f" "$base/$f" || die "download of $f failed"
+	done
+
+	[ -s "$KEY" ] || die "no signing key in $KEY: refusing an image whose origin cannot be checked"
+	usign -V -q -m SHA256SUMS -p "$KEY" -x SHA256SUMS.sig || die "SIGNATURE CHECK FAILED - not installing"
+	echo "signature: OK"
+
+	grep " $IMG\$" SHA256SUMS > image.sum || die "$IMG is not listed in SHA256SUMS"
+	sha256sum -c image.sum >/dev/null 2>&1 || die "CHECKSUM MISMATCH - not installing"
+	echo "checksum: OK"
+
+	# A fixed ECC strength in the device tree is what boot-loops units with the other NAND chip.
+	member="$(tar -tf "$IMG" 2>/dev/null | grep '/kernel$' | head -n1)"
+	[ -n "$member" ] || die "image has no kernel member"
+	if tar -xOf "$IMG" "$member" 2>/dev/null | grep -q 'nand-ecc-strength'; then
+		die "image carries a fixed NAND ECC strength - not installing"
+	fi
+	echo "ECC: no fixed strength (chosen by the kernel from the chip)"
+
+	sysupgrade -T "$DIR/$IMG" || die "sysupgrade -T rejected the image - not installing"
+	echo "sysupgrade test: OK"
+}
+
+case "${1:-}" in
+check)
+	find_latest
+	echo "installed: ${CURRENT:-unknown} ($VARIANT, channel $CHANNEL)"
+	if [ "$AVAILABLE" = 1 ]; then
+		echo "available: $LATEST  ->  run: ax5400-ota install"
+		logger -t ax5400-ota "update available: $LATEST (installed ${CURRENT:-unknown})"
+	else
+		echo "no newer release"
+	fi
+	;;
+download | install)
+	find_latest
+	[ "$AVAILABLE" = 1 ] || { echo "no newer release than ${CURRENT:-unknown}"; exit 0; }
+	free_kb="$(df -k /tmp | awk 'NR==2 {print $4}')"
+	[ "${free_kb:-0}" -gt 120000 ] || die "less than 120 MB free in /tmp"
+	download
+	if [ "$1" = download ]; then
+		echo "verified image: $DIR/$IMG"
+		exit 0
+	fi
+	if [ "${2:-}" != --yes ]; then
+		printf 'Flash %s over %s now? Settings are kept; the router reboots. [y/N] ' "$LATEST" "${CURRENT:-unknown}"
+		read -r a
+		[ "$a" = y ] || [ "$a" = Y ] || { echo "cancelled"; exit 0; }
+	fi
+	logger -t ax5400-ota "installing $LATEST over ${CURRENT:-unknown}"
+	exec sysupgrade "$DIR/$IMG"
+	;;
+*)
+	sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+	exit 1
+	;;
+esac

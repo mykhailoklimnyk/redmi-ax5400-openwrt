@@ -1,0 +1,29 @@
+#!/bin/sh
+# Watchdog for the DNS service on the LAN address. Seen 2026-11-17: the socket on the LAN address
+# stopped accepting packets (receive-buffer accounting stuck, every query dropped) while the
+# service itself and 127.0.0.1 kept working. Two failed lookups in a row -> restart dnsmasq.
+LAN_IP="$(uci -q get network.lan.ipaddr | cut -d/ -f1)"
+[ -n "$LAN_IP" ] || exit 0
+ok() { nslookup -type=a openwrt.org "$LAN_IP" 2>/dev/null | grep -q '^Address: [0-9]'; }
+ok && exit 0
+sleep 5
+ok && exit 0
+# only restart if the internet itself is there, otherwise a restart cannot help
+ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 || exit 0
+drops="$(awk '$2 ~ /:0035$/ {s+=$NF} END {print s+0}' /proc/net/udp)"
+logger -t dns-lan-check "no answer on $LAN_IP:53 (socket drops: $drops), restarting dnsmasq"
+echo "$(date +%s)" >> /tmp/dns-lan-check.restarts
+# keep the evidence for the bug report (flash, small, at most 5 files)
+D=/root/dns-lan-check; mkdir -p "$D"
+{
+	date; uptime
+	echo "== /proc/net/udp"; cat /proc/net/udp
+	echo "== sockstat"; cat /proc/net/sockstat
+	echo "== snmp udp"; grep '^Udp' /proc/net/snmp
+	echo "== meminfo"; head -n 12 /proc/meminfo
+	echo "== dnsmasq"; for pid in $(pidof dnsmasq); do grep -E 'State|VmRSS|Threads' /proc/$pid/status; ls /proc/$pid/fd | wc -l; done
+	echo "== dmesg tail"; dmesg | tail -n 60
+	echo "== log tail"; logread | grep -v -E 'hostapd|crond' | tail -n 40
+} > "$D/$(date +%Y%m%d-%H%M%S).txt" 2>&1
+ls -t "$D"/*.txt 2>/dev/null | tail -n +6 | xargs -r rm -f
+/etc/init.d/dnsmasq restart

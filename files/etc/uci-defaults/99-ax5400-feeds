@@ -1,0 +1,6 @@
+#!/bin/sh
+# The generated package feed list names an "nss" feed that exists on no server and breaks
+# "apk update". Packages for the custom kernel come only with a whole new image.
+f=/etc/apk/repositories.d/distfeeds.list
+[ -f "$f" ] && sed -i '/\/nss\/packages\.adb/d' "$f"
+exit 0
