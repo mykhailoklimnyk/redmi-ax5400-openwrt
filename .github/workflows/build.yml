@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: Which image to build
+        description: Which image to build (both = next and official)
         type: choice
         options: [both, nss, next, official]
-        default: both
+        default: next
       mode:
         description: full = build and check the image; configure-only = stop after the configuration checks
         type: choice
@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON((github.event_name == 'schedule' || inputs.variant == 'both') && '["nss","next","official"]' || format('["{0}"]', inputs.variant)) }}
+        variant: ${{ fromJSON((github.event_name == 'schedule' || inputs.variant == 'both') && '["next","official"]' || format('["{0}"]', inputs.variant)) }}
     env:
       VARIANT: ${{ matrix.variant }}
       MODE: ${{ github.event_name == 'schedule' && 'full' || inputs.mode }}
