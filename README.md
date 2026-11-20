@@ -137,7 +137,8 @@ scripts/verify.sh             # image and check results in ./out
 
 In GitHub Actions: **Actions → Build firmware → Run workflow**. A monthly schedule builds all
 three images, and a weekly job opens an issue when a pinned source has a new release or one of the
-carried pull requests is merged or closed. To sign releases, generate a key pair with
+carried pull requests is merged or closed. When the base of `next` has a new release, the
+weekly job pins it and starts a candidate build by itself; nothing is ever installed automatically. To sign releases, generate a key pair with
 `usign -G -s secret.key -p files/etc/ax5400-ota/pubkey`, commit the public key and store the
 content of `secret.key` as the repository secret `USIGN_SECRET_KEY`.
 

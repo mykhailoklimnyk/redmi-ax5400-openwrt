@@ -6,8 +6,9 @@ on:
     - cron: "41 5 * * 1" # every Monday
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  actions: write
 
 jobs:
   watch:
@@ -31,3 +32,25 @@ jobs:
             exit 0
           fi
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file report.md
+
+      - name: Pin a new release of the next base and build a candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          tag="$(scripts/bump-next.sh)"
+          rc=$?
+          set -e
+          if [ "$rc" = 10 ]; then echo "next base: no new release"; exit 0; fi
+          [ "$rc" = 0 ] || exit "$rc"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "next: pin base release $tag"
+          git push
+          gh workflow run build.yml --ref "$GITHUB_REF_NAME" -f variant=next -f mode=full -f publish=true
+          {
+            echo "The base of the \`next\` image has a new release, \`$tag\`. It is pinned in \`sources.env\` now and a candidate build has been started: see the [Build firmware runs]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/build.yml)."
+            echo
+            echo "The candidate appears under Releases as a pre-release if every check passes. Nothing is installed anywhere by this. Read the base's release notes before flashing: $GITHUB_SERVER_URL/kuncy7/openwrt-nss-edma/releases/tag/$tag"
+          } > bump.md
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "New base release $tag: candidate build started" --body-file bump.md
