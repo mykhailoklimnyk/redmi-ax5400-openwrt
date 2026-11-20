@@ -38,8 +38,11 @@ There is also an experimental third image, `next`: the current NSS base for IPQ5
 ([kuncy7/openwrt-nss-edma](https://github.com/kuncy7/openwrt-nss-edma), which the `nss` source was
 forked from) at one of its release tags, with a newer NSS firmware and many Wi-Fi offload fixes.
 That project's own image for this router keeps a fixed 8-bit ECC in the device tree; the `next`
-image here removes it, like the other two. It has not been run on hardware by this project yet,
-and its network configuration differs from `nss`, so it is a clean install, not an update.
+image here removes it, like the other two. It runs on the maintainer's 64-byte-OOB unit since
+2026-11-18 (updated from `nss` with settings kept, which carries the `nss` port layout over); with
+its newer 2.4 GHz Wi-Fi firmware, clients re-join normally with Wi-Fi offload on, which the `nss`
+image does not manage. Its default port layout differs from `nss`, and a clean install and
+128-byte-OOB units have not been tried by this project.
 
 All images add the same package set ([config/](config/)): LuCI with the Argon theme, WireGuard,
 policy-based routing, DNS-over-HTTPS, ad blocking, banIP, watchcat and Prometheus exporters.
@@ -132,8 +135,8 @@ scripts/build.sh              # 1.5-4 hours, about 15 GB of disk
 scripts/verify.sh             # image and check results in ./out
 ```
 
-In GitHub Actions: **Actions → Build firmware → Run workflow**. A monthly schedule builds both
-images, and a weekly job opens an issue when a pinned source has a new release or one of the
+In GitHub Actions: **Actions → Build firmware → Run workflow**. A monthly schedule builds all
+three images, and a weekly job opens an issue when a pinned source has a new release or one of the
 carried pull requests is merged or closed. To sign releases, generate a key pair with
 `usign -G -s secret.key -p files/etc/ax5400-ota/pubkey`, commit the public key and store the
 content of `secret.key` as the repository secret `USIGN_SECRET_KEY`.

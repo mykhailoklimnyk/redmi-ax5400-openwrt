@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON((github.event_name == 'schedule' || inputs.variant == 'both') && '["nss","official"]' || format('["{0}"]', inputs.variant)) }}
+        variant: ${{ fromJSON((github.event_name == 'schedule' || inputs.variant == 'both') && '["nss","next","official"]' || format('["{0}"]', inputs.variant)) }}
     env:
       VARIANT: ${{ matrix.variant }}
       MODE: ${{ github.event_name == 'schedule' && 'full' || inputs.mode }}
