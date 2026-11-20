@@ -1,2 +1,3 @@
 # Extra packages for the "next" variant (newer NSS base).
 kmod-nft-offload
+luci-app-nss
