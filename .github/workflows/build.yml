@@ -129,4 +129,6 @@ jobs:
             cat out/checks.txt
             echo '```'
           } > notes.md
-          gh release create "$VERSION" out/* --prerelease --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md
+          # No --target: a tag on a commit older than the branch head whose workflow files
+          # differ is refused for the workflow token (HTTP 403). The notes name the exact commit.
+          gh release create "$VERSION" out/* --prerelease --title "$VERSION" --notes-file notes.md
