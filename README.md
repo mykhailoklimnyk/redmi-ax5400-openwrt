@@ -44,6 +44,14 @@ its newer 2.4 GHz Wi-Fi firmware, clients re-join normally with Wi-Fi offload on
 image does not manage. Its default port layout differs from `nss`, and a clean install and
 128-byte-OOB units have not been tried by this project.
 
+With the base's standard DSA ports (`nss.general.topology='dsa'`) the kernel of that base crashes
+about one time in three when all interfaces go down at once, which is what `sysupgrade` does
+before it writes: the qca-8021q tagger hands a bridge pointer that has just been cleared to
+`br_vlan_enabled()`. The `next` image here carries a fix
+([patches/dsa-bridge-leave/](patches/dsa-bridge-leave/)); with it the same unit went through 18
+such shutdowns in a row without a reset. Images built before 2026-11-22 do not have it: on those,
+switch to the `vlan-trunk` layout before running `sysupgrade`.
+
 All images add the same package set ([config/](config/)): LuCI with the Argon theme, WireGuard,
 policy-based routing, DNS-over-HTTPS, ad blocking, banIP, watchcat and Prometheus exporters.
 The interface languages are English and Ukrainian. No home-specific settings are baked in.

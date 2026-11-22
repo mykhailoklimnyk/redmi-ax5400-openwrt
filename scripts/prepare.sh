@@ -78,6 +78,21 @@ if [ "$VARIANT" = official ]; then
 	fi
 fi
 
+# --- DSA ports of the "next" base: a port leaving its bridge must not crash the kernel -----------
+# The base's qca-8021q tagger passes a cleared dp->bridge to br_vlan_enabled(); "ifdown -a" (which
+# sysupgrade runs) then resets the router about one time in three with topology=dsa.
+if [ "$VARIANT" = next ]; then
+	G="target/linux/generic/pending-$KV"
+	if ! grep -lqs 'net/dsa/tag_qca_8021q.c' "$G"/*.patch; then
+		echo "DSA: the base carries no qca-8021q tagger, no patch added"
+	elif grep -ls 'net/dsa/tag_qca_8021q.c' "$G"/*.patch | xargs grep -qs 'READ_ONCE(dp->bridge)'; then
+		echo "DSA: the bridge-leave fix is already in the source, no patch added"
+	else
+		cp "$ROOT"/patches/dsa-bridge-leave/*.patch "$G"/
+		echo "DSA: added the bridge-leave fix for the qca-8021q tagger"
+	fi
+fi
+
 # --- files added to the image ----------------------------------------------------------------
 mkdir -p files
 cp -a "$ROOT"/files/. files/
