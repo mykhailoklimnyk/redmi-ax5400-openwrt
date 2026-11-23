@@ -37,20 +37,19 @@ Two problems make the plain OpenWrt snapshot unsafe or slow on this model:
 There is also an experimental third image, `next`: the current NSS base for IPQ5018
 ([kuncy7/openwrt-nss-edma](https://github.com/kuncy7/openwrt-nss-edma), which the `nss` source was
 forked from) at one of its release tags, with a newer NSS firmware and many Wi-Fi offload fixes.
-That project's own image for this router keeps a fixed 8-bit ECC in the device tree; the `next`
-image here removes it, like the other two. It runs on the maintainer's 64-byte-OOB unit since
+Until `ipq50xx-2026.11.20` that project's own image for this router kept a fixed 8-bit ECC in the
+device tree; since `ipq50xx-2026.11.23` it picks the ECC by the chip, like the images here. It runs on the maintainer's 64-byte-OOB unit since
 2026-11-18 (updated from `nss` with settings kept, which carries the `nss` port layout over); with
 its newer 2.4 GHz Wi-Fi firmware, clients re-join normally with Wi-Fi offload on, which the `nss`
 image does not manage. Its default port layout differs from `nss`, and a clean install and
 128-byte-OOB units have not been tried by this project.
 
-With the base's standard DSA ports (`nss.general.topology='dsa'`) the kernel of that base crashes
-about one time in three when all interfaces go down at once, which is what `sysupgrade` does
-before it writes: the qca-8021q tagger hands a bridge pointer that has just been cleared to
-`br_vlan_enabled()`. The `next` image here carries a fix
-([patches/dsa-bridge-leave/](patches/dsa-bridge-leave/)); with it the same unit went through 18
-such shutdowns in a row without a reset. Images built before 2026-11-22 do not have it: on those,
-switch to the `vlan-trunk` layout before running `sysupgrade`.
+With the base's standard DSA ports (`nss.general.topology='dsa'`) the kernel of that base used to
+crash about one time in three when all interfaces went down at once, which is what `sysupgrade`
+does before it writes. The fix found on this router is in the base since `ipq50xx-2026.11.23`
+([kuncy7/openwrt-nss-edma#94](https://github.com/kuncy7/openwrt-nss-edma/pull/94)), and
+`next-20261122-8` carried it as a patch. Older `next` images do not have it: on those, switch to
+the `vlan-trunk` layout before running `sysupgrade`.
 
 All images add the same package set ([config/](config/)): LuCI with the Argon theme, WireGuard,
 policy-based routing, DNS-over-HTTPS, ad blocking, banIP, watchcat and Prometheus exporters.
